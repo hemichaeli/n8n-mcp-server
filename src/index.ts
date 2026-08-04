@@ -4,6 +4,9 @@ import express from "express";
 import { z } from "zod";
 import { n8nRequest, formatResponse } from "./api-client.js";
 import { registerOAuth, requireBearer, authEnabled } from "./mcp-auth.js";
+import { installProcessGuards, guardSseSocket } from "./process-guards.js";
+
+installProcessGuards("n8n-mcp");
 
 const BASE_URL =
   process.env.SERVER_URL ||
@@ -12,7 +15,7 @@ const BASE_URL =
     : "http://localhost:" + (process.env.PORT || "3000"));
 
 function createMcpServer(): McpServer {
-  const server = new McpServer({ name: "n8n-mcp-server", version: "2.1.0" });
+  const server = new McpServer({ name: "n8n-mcp-server", version: "2.1.1" });
 
   // HEALTH / UTILITY
   server.tool("n8n_health_check", "Check connectivity to n8n. Returns version and status.", {}, async () => {
@@ -563,6 +566,7 @@ app.use((req, res, next) => {
 });
 
 app.get("/sse", requireBearer(BASE_URL), async (_req, res) => {
+  guardSseSocket(_req, res);
   const server = createMcpServer();
   const transport = new SSEServerTransport("/messages", res);
   sessions.set(transport.sessionId, { transport, server });
@@ -578,14 +582,14 @@ app.post("/messages", requireBearer(BASE_URL), async (req, res) => {
 });
 
 app.get("/health", (_req, res) => {
-  res.json({ status: "ok", server: "n8n-mcp-server", version: "2.1.0", sessions: sessions.size, auth: authEnabled, n8nConfigured: !!(process.env.N8N_API_KEY && process.env.N8N_BASE_URL) });
+  res.json({ status: "ok", server: "n8n-mcp-server", version: "2.1.1", sessions: sessions.size, auth: authEnabled, n8nConfigured: !!(process.env.N8N_API_KEY && process.env.N8N_BASE_URL) });
 });
 
 registerOAuth(app, { baseUrl: BASE_URL, clientPrefix: "n8n-mcp" });
 
 const PORT = parseInt(process.env.PORT || "3000");
 app.listen(PORT, () => {
-  console.log(`n8n MCP server v2.1.0 listening on port ${PORT}`);
+  console.log(`n8n MCP server v2.1.1 listening on port ${PORT}`);
   console.log(`SSE endpoint: http://localhost:${PORT}/sse`);
   console.log(`N8N_BASE_URL: ${process.env.N8N_BASE_URL || "(not set)"}`);
   console.log(`N8N_API_KEY: ${process.env.N8N_API_KEY ? "configured" : "NOT SET"}`);
